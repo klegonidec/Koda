@@ -35,6 +35,10 @@ docker buildx build --platform linux/amd64,linux/arm64 -t duo-bridge:dev --push 
 
 Le MVP doit être placé derrière HTTPS. Les secrets de production doivent être injectés via fichiers secrets (`*_FILE`) ou un gestionnaire de secrets, jamais committés.
 
+## GitHub Actions
+
+La CI GitHub valide le formatage, Clippy, les tests et un build Docker amd64 sur chaque push/PR. Un tag `vX.Y.Z` publie les images multiarchitecture dans GHCR. Définir la variable de dépôt `OPENCODE_VERSION` avec une version OpenCode testée avant de créer un tag.
+
 ## État actuel
 
 Le socle exécutable comprend le setup/admin, SQLite, sessions persistées, queue de jobs, dashboard, skills et endpoints webhook. L’adaptateur OpenCode effectue le health-check ; l’envoi de prompts et le clonage GitLab sont les prochaines étapes du lot d’orchestration.
