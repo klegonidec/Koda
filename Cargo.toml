@@ -11,7 +11,7 @@ axum = { version = "0.8", features = ["form", "json", "macros"] }
 base64 = "0.22"
 chrono = { version = "0.4", features = ["clock", "serde"] }
 dotenvy = "0.15"
-hmac = "0.12"
+hmac = "0.13"
 hex = "0.4"
 http = "1"
 http-body-util = "0.1"
