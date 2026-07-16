@@ -30,7 +30,7 @@ struct Config {
 #[derive(Debug, Clone, Serialize)]
 struct SessionView { id: String, source: String, status: String, mode: String, title: String, created_at: String, finished_at: Option<String>, source_url: Option<String> }
 
-#[derive(Deserialize)] struct SetupForm { email: String, display_name: String, password: String, password_confirm: String }
+#[derive(Deserialize)] struct SetupForm { bootstrap_password: String, email: String, display_name: String, password: String, password_confirm: String }
 #[derive(Deserialize)] struct LoginForm { email: String, password: String }
 #[derive(Deserialize)] struct MessageForm { message: String }
 
@@ -94,12 +94,12 @@ async fn is_installed(db: &SqlitePool) -> Result<bool, sqlx::Error> {
 
 async fn setup_page(State(s): State<Arc<AppState>>) -> impl IntoResponse {
     if is_installed(&s.db).await.unwrap_or(false) { return Redirect::to("/login").into_response(); }
-    Html(r#"<!doctype html><html lang="fr"><meta charset="utf-8"><title>Installation Duo Bridge</title><style>body{font:16px system-ui;max-width:620px;margin:4rem auto;padding:1rem}label{display:block;margin-top:1rem}input{width:100%;padding:.6rem}button{margin-top:1.5rem;padding:.7rem 1rem}</style><h1>Installation</h1><p>Créez le premier compte administrateur.</p><form method="post"><label>Email<input name="email" type="email" required></label><label>Nom<input name="display_name" required></label><label>Mot de passe admin<input name="password" type="password" minlength="14" required></label><label>Confirmation<input name="password_confirm" type="password" minlength="14" required></label><button>Installer</button></form></html>"#).into_response()
+    Html(r#"<!doctype html><html lang="fr"><meta charset="utf-8"><title>Installation Duo Bridge</title><style>body{font:16px system-ui;max-width:620px;margin:4rem auto;padding:1rem}label{display:block;margin-top:1rem}input{width:100%;padding:.6rem}button{margin-top:1.5rem;padding:.7rem 1rem}</style><h1>Installation</h1><p>Validez le mot de passe de bootstrap puis créez le premier compte administrateur.</p><form method="post"><label>Mot de passe de bootstrap<input name="bootstrap_password" type="password" required></label><label>Email<input name="email" type="email" required></label><label>Nom<input name="display_name" required></label><label>Mot de passe admin<input name="password" type="password" minlength="14" required></label><label>Confirmation<input name="password_confirm" type="password" minlength="14" required></label><button>Installer</button></form></html>"#).into_response()
 }
 
 async fn setup_submit(State(s): State<Arc<AppState>>, Form(f): Form<SetupForm>) -> impl IntoResponse {
     if is_installed(&s.db).await.unwrap_or(false) { return Redirect::to("/login").into_response(); }
-    if s.cfg.setup_password.is_empty() || !constant_eq(f.password.as_bytes(), f.password_confirm.as_bytes()) || f.password.len() < 14 { return (StatusCode::BAD_REQUEST, Html("Mot de passe invalide ou confirmation différente.")).into_response(); }
+    if s.cfg.setup_password.is_empty() || !constant_eq(s.cfg.setup_password.as_bytes(), f.bootstrap_password.as_bytes()) || !constant_eq(f.password.as_bytes(), f.password_confirm.as_bytes()) || f.password.len() < 14 { return (StatusCode::BAD_REQUEST, Html("Mot de passe de bootstrap ou mot de passe admin invalide.")).into_response(); }
     let salt = SaltString::generate(&mut OsRng);
     let hash = match Argon2::default().hash_password(f.password.as_bytes(), &salt) { Ok(h) => h.to_string(), Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response() };
     let now = Utc::now().to_rfc3339();
