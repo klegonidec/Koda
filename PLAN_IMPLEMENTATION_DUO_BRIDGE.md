@@ -1,4 +1,7 @@
-# Plan d’implémentation — `duo-bridge`
+# Archive de plan — `duo-bridge`
+
+> Ce document décrit le prototype historique et n’est plus la spécification cible.
+> La cible implémentée est Koda Gate : dashboard React, trois workflows Jira/MR/pipeline échoué, politiques, preuves, approbations, harness et egress contrôlé. Voir `docs/architecture.md`, `docs/security.md` et le README.
 
 ## 0. Consigne d’exécution
 
