@@ -4,6 +4,8 @@
 !.env.example
 data/
 workspaces/
+frontend/node_modules/
+frontend/dist/
 *.db
 *.db-shm
 *.db-wal

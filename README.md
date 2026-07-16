@@ -1,6 +1,8 @@
-# duo-bridge
+# Koda
 
-MVP Rust/Axum pour recevoir des webhooks Jira/GitLab, mettre en file des sessions et piloter OpenCode sur une instance EC2.
+Control plane Rust/Axum pour exécuter OpenCode de manière contrôlée depuis Jira et GitLab sur une instance EC2.
+
+Le MVP couvre trois parcours : Jira vers une Draft MR contrôlée, revue de merge request GitLab, et diagnostic de pipeline GitLab échoué. Koda conserve les preuves d’exécution, applique une politique par projet et ne merge jamais automatiquement.
 
 ## Démarrage local
 
@@ -30,8 +32,8 @@ docker buildx build --platform linux/amd64,linux/arm64 -t duo-bridge:dev --push 
 ## Webhooks
 
 - Jira : `POST /api/v1/webhooks/jira/work-items`
-- GitLab code : `POST /api/v1/webhooks/gitlab/code-events`
-- Déclenchement pipeline : `POST /api/v1/webhooks/gitlab/pipeline-trigger`
+- GitLab MR : `POST /api/v1/webhooks/gitlab/code-events`
+- GitLab pipeline échoué : `POST /api/v1/webhooks/gitlab/pipeline-events`
 
 Le MVP doit être placé derrière HTTPS. Les secrets de production doivent être injectés via fichiers secrets (`*_FILE`) ou un gestionnaire de secrets, jamais committés.
 
@@ -41,4 +43,4 @@ La CI GitHub valide le formatage, Clippy, les tests et un build Docker amd64 sur
 
 ## État actuel
 
-Le socle exécutable comprend le setup/admin, SQLite, sessions persistées, queue de jobs, dashboard, skills et endpoints webhook. L’adaptateur OpenCode effectue le health-check ; l’envoi de prompts et le clonage GitLab sont les prochaines étapes du lot d’orchestration.
+Le socle comprend le setup/admin, SQLite, sessions persistées, politiques, preuves, approbations, dashboard React et endpoints des trois parcours. L’exécution OpenCode est encore encapsulée derrière l’adaptateur ; le runner éphémère et le proxy egress sont les prochaines étapes de durcissement.

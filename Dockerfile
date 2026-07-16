@@ -1,3 +1,10 @@
+FROM node:22-bookworm-slim AS frontend
+WORKDIR /frontend
+COPY frontend/package.json ./
+RUN npm install
+COPY frontend ./
+RUN npm run build
+
 FROM rust:1.85-bookworm AS builder
 WORKDIR /src
 COPY Cargo.toml rust-toolchain.toml ./
@@ -13,10 +20,14 @@ RUN apt-get update \
     && useradd --uid 10001 --create-home --shell /usr/sbin/nologin app
 WORKDIR /app
 COPY --from=builder /src/target/release/duo-bridge /usr/local/bin/duo-bridge
+COPY --from=builder /src/target/release/koda-harness /usr/local/bin/koda-harness
+COPY --from=builder /src/target/release/koda-egress /usr/local/bin/koda-egress
 COPY migrations /app/migrations
+COPY --from=frontend /frontend/dist /app/static
 RUN mkdir -p /data /workspaces && chown -R app:app /data /workspaces /app
 USER app
 ENV APP_BIND=0.0.0.0:8080
+ENV KODA_STATIC_DIR=/app/static
 EXPOSE 8080
 HEALTHCHECK --interval=20s --timeout=5s CMD /usr/bin/curl --fail http://127.0.0.1:8080/health/live || exit 1
 ENTRYPOINT ["/usr/bin/tini", "--"]

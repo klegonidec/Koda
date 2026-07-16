@@ -3,4 +3,6 @@ target
 .env
 data
 workspaces
+frontend/node_modules
+frontend/dist
 PLAN_IMPLEMENTATION_DUO_BRIDGE.md
