@@ -1,0 +1,9 @@
+/target
+.env
+.env.*
+!.env.example
+data/
+workspaces/
+*.db
+*.db-shm
+*.db-wal
