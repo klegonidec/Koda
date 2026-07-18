@@ -13,7 +13,7 @@
 
 > **Node.js on Ubuntu/Debian:** The system `apt` package may be outdated. Prefer:
 > ```bash
-> curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+> curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 > sudo apt install -y nodejs
 > ```
 
@@ -147,12 +147,12 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source "$HOME/.cargo/env"
 
 # Install Node.js 22
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt install -y nodejs
 
 # Verify
 rustc --version    # should be 1.85.0
-node --version     # should be v22.x
+node --version     # should be v24.x
 
 # Run
 cp .env.example .env
@@ -172,7 +172,7 @@ brew install rust node pkg-config openssl sqlite
 
 # Verify
 rustc --version    # should be 1.85.0
-node --version     # should be v22.x
+node --version     # should be v24.x
 
 # Run
 cp .env.example .env
