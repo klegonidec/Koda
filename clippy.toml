@@ -1,0 +1,6 @@
+cognitive-complexity-threshold = 25
+allow-unwrap-in-tests = true
+
+disallowed-methods = [
+    { path = "std::mem::forget", reason = "memory leaks" },
+]
