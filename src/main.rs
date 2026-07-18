@@ -161,6 +161,15 @@ async fn main() -> anyhow::Result<()> {
             "/api/v1/webhooks/gitlab/pipeline-events",
             post(webhook_pipeline_event),
         )
+        .route(
+            "/api/v1/webhooks/github/pull-requests",
+            post(webhook_github_pr),
+        )
+        .route(
+            "/api/v1/webhooks/github/push-events",
+            post(webhook_github_push),
+        )
+        .route("/api/v1/webhooks/github/issues", post(webhook_github_issue))
         .fallback(frontend)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
@@ -626,8 +635,8 @@ async fn api_projects(State(s): State<Arc<AppState>>, headers: HeaderMap) -> imp
     if auth_user(&s.db, &headers).await.is_none() {
         return StatusCode::UNAUTHORIZED.into_response();
     }
-    let rows=sqlx::query("SELECT id,name,jira_project_key,gitlab_project_id,gitlab_project_path,default_branch,policy_json,enabled FROM project_bindings ORDER BY name").fetch_all(&s.db).await.unwrap_or_default();
-    Json(rows.into_iter().map(|r|json!({"id":r.get::<String,_>("id"),"name":r.get::<String,_>("name"),"jira_project_key":r.get::<Option<String>,_>("jira_project_key"),"gitlab_project_id":r.get::<String,_>("gitlab_project_id"),"gitlab_project_path":r.get::<String,_>("gitlab_project_path"),"default_branch":r.get::<String,_>("default_branch"),"policy":r.get::<String,_>("policy_json"),"enabled":r.get::<i64,_>("enabled")!=0})).collect::<Vec<_>>()).into_response()
+    let rows=sqlx::query("SELECT id,name,jira_project_key,gitlab_project_id,gitlab_project_path,github_repo_id,github_repo_full_name,default_branch,policy_json,enabled FROM project_bindings ORDER BY name").fetch_all(&s.db).await.unwrap_or_default();
+    Json(rows.into_iter().map(|r|json!({"id":r.get::<String,_>("id"),"name":r.get::<String,_>("name"),"jira_project_key":r.get::<Option<String>,_>("jira_project_key"),"gitlab_project_id":r.get::<Option<String>,_>("gitlab_project_id"),"gitlab_project_path":r.get::<Option<String>,_>("gitlab_project_path"),"github_repo_id":r.get::<Option<String>,_>("github_repo_id"),"github_repo_full_name":r.get::<Option<String>,_>("github_repo_full_name"),"default_branch":r.get::<String,_>("default_branch"),"policy":r.get::<String,_>("policy_json"),"enabled":r.get::<i64,_>("enabled")!=0})).collect::<Vec<_>>()).into_response()
 }
 
 async fn api_project_create(
@@ -649,10 +658,20 @@ async fn api_project_create(
         .and_then(Value::as_str)
         .unwrap_or("")
         .trim();
-    if name.is_empty() || gid.is_empty() || path.is_empty() {
+    let gh_repo = v
+        .get("github_repo_full_name")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    let gh_id = v
+        .get("github_repo_id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    if name.is_empty() || (gid.is_empty() && gh_repo.is_empty()) {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({"error":"name_gitlab_project_required"})),
+            Json(json!({"error":"name_and_project_required"})),
         )
             .into_response();
     }
@@ -662,7 +681,7 @@ async fn api_project_create(
         .get("policy")
         .cloned()
         .unwrap_or_else(|| json!({"mode":"read_only"}));
-    let r=sqlx::query("INSERT INTO project_bindings(id,name,jira_project_key,gitlab_project_id,gitlab_project_path,default_branch,policy_json,enabled,created_at,updated_at) VALUES(?,?,?,?,?,?,?,1,?,?)").bind(&id).bind(name).bind(v.get("jira_project_key").and_then(Value::as_str)).bind(gid).bind(path).bind(v.get("default_branch").and_then(Value::as_str).unwrap_or("main")).bind(policy.to_string()).bind(&now).bind(&now).execute(&s.db).await;
+    let r=sqlx::query("INSERT INTO project_bindings(id,name,jira_project_key,gitlab_project_id,gitlab_project_path,github_repo_id,github_repo_full_name,default_branch,policy_json,enabled,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,1,?,?)").bind(&id).bind(name).bind(v.get("jira_project_key").and_then(Value::as_str)).bind(if gid.is_empty(){None}else{Some(gid)}).bind(if path.is_empty(){None}else{Some(path)}).bind(if gh_id.is_empty(){None}else{Some(gh_id)}).bind(if gh_repo.is_empty(){None}else{Some(gh_repo)}).bind(v.get("default_branch").and_then(Value::as_str).unwrap_or("main")).bind(policy.to_string()).bind(&now).bind(&now).execute(&s.db).await;
     if r.is_err() {
         return (
             StatusCode::CONFLICT,
@@ -698,7 +717,10 @@ async fn api_integration_create(
     let kind = v.get("kind").and_then(Value::as_str).unwrap_or("");
     let name = v.get("name").and_then(Value::as_str).unwrap_or("");
     let base = v.get("base_url").and_then(Value::as_str).unwrap_or("");
-    if !["gitlab", "jira", "opencode"].contains(&kind) || name.is_empty() || base.is_empty() {
+    if !["gitlab", "github", "jira", "opencode"].contains(&kind)
+        || name.is_empty()
+        || base.is_empty()
+    {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({"error":"invalid_integration"})),
@@ -838,6 +860,57 @@ async fn webhook_pipeline_event(
     webhook_ingest(&s, "gitlab", &headers, &v, "gitlab_pipeline_failed").await
 }
 
+async fn webhook_github_pr(
+    State(s): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(v): Json<Value>,
+) -> impl IntoResponse {
+    if !verify_github(&headers, &v) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    webhook_ingest(&s, "github", &headers, &v, "github_pull_request").await
+}
+
+async fn webhook_github_push(
+    State(s): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(v): Json<Value>,
+) -> impl IntoResponse {
+    if !verify_github(&headers, &v) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let ref_name = v.get("ref").and_then(Value::as_str).unwrap_or("");
+    if ref_name == "refs/heads/main" || ref_name == "refs/heads/master" {
+        webhook_ingest(&s, "github", &headers, &v, "github_push_main").await
+    } else {
+        (
+            StatusCode::OK,
+            Json(json!({"status":"ignored","reason":"non_default_branch"})),
+        )
+            .into_response()
+    }
+}
+
+async fn webhook_github_issue(
+    State(s): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(v): Json<Value>,
+) -> impl IntoResponse {
+    if !verify_github(&headers, &v) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let action = v.get("action").and_then(Value::as_str).unwrap_or("");
+    if action == "opened" || action == "labeled" {
+        webhook_ingest(&s, "github", &headers, &v, "github_issue").await
+    } else {
+        (
+            StatusCode::OK,
+            Json(json!({"status":"ignored","reason":"uninteresting_action"})),
+        )
+            .into_response()
+    }
+}
+
 async fn webhook_ingest(
     s: &AppState,
     provider: &str,
@@ -848,6 +921,8 @@ async fn webhook_ingest(
     let key = headers
         .get("webhook-id")
         .or_else(|| headers.get("x-gitlab-event-uuid"))
+        .or_else(|| headers.get("x-github-delivery"))
+        .or_else(|| headers.get("x-github-event-id"))
         .or_else(|| headers.get("idempotency-key"))
         .and_then(|x| x.to_str().ok())
         .map(str::to_owned)
@@ -859,26 +934,16 @@ async fn webhook_ingest(
         return (StatusCode::OK, Json(json!({"status":"duplicate"}))).into_response();
     }
     let source_id = key.clone();
-    let source = if provider == "jira" {
-        "jira"
-    } else if event == "gitlab_pipeline_failed" {
-        "gitlab_pipeline"
-    } else {
-        "gitlab_mr"
-    };
-    let workflow = if event == "gitlab_pipeline_failed" {
-        "pipeline_analysis"
-    } else if provider == "jira" {
-        "jira_implement"
-    } else {
-        "mr_review"
-    };
-    let mode = if workflow == "mr_review" {
-        "review"
-    } else if workflow == "pipeline_analysis" {
-        "pipeline_analysis"
-    } else {
-        "implement"
+    let (source, workflow, mode) = match (provider, event) {
+        ("jira", _) => ("jira", "jira_implement", "implement"),
+        ("gitlab", "gitlab_pipeline_failed") => {
+            ("gitlab_pipeline", "pipeline_analysis", "pipeline_analysis")
+        }
+        ("gitlab", _) => ("gitlab_mr", "mr_review", "review"),
+        ("github", "github_pull_request") => ("github_pr", "mr_review", "review"),
+        ("github", "github_push_main") => ("github_push", "pipeline_analysis", "pipeline_analysis"),
+        ("github", "github_issue") => ("github_issue", "jira_implement", "implement"),
+        _ => ("unknown", "legacy", "review"),
     };
     let title = v
         .get("object_attributes")
@@ -889,6 +954,22 @@ async fn webhook_ingest(
                 .and_then(|x| x.get("fields"))
                 .and_then(|x| x.get("summary"))
                 .and_then(Value::as_str)
+        })
+        .or_else(|| {
+            v.get("pull_request")
+                .and_then(|x| x.get("title"))
+                .and_then(Value::as_str)
+        })
+        .or_else(|| {
+            v.get("issue")
+                .and_then(|x| x.get("title"))
+                .and_then(Value::as_str)
+        })
+        .or_else(|| {
+            v.get("head_commit")
+                .and_then(|x| x.get("message"))
+                .and_then(Value::as_str)
+                .map(|s| s.lines().next().unwrap_or(s))
         })
         .unwrap_or("Koda session");
     let sid = Uuid::now_v7().to_string();
@@ -918,6 +999,27 @@ fn verify_gitlab(_s: &AppState, headers: &HeaderMap, body: &Value) -> bool {
         if let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) {
             mac.update(body.to_string().as_bytes());
             return mac.verify_slice(sig.as_bytes()).is_ok();
+        }
+    }
+    false
+}
+
+fn verify_github(headers: &HeaderMap, body: &Value) -> bool {
+    let secret = env_or_file("GITHUB_WEBHOOK_SECRET");
+    if secret.is_empty() {
+        return true;
+    }
+    if let Some(sig_header) = headers
+        .get("x-hub-signature-256")
+        .and_then(|x| x.to_str().ok())
+    {
+        let expected = sig_header.strip_prefix("sha256=").unwrap_or(sig_header);
+        if let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) {
+            mac.update(body.to_string().as_bytes());
+            return constant_eq(
+                expected.as_bytes(),
+                &hex::encode(mac.finalize().into_bytes()).as_bytes().to_vec(),
+            );
         }
     }
     false
