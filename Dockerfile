@@ -8,7 +8,7 @@ RUN npm run build
 FROM rust:1.85-bookworm AS builder
 WORKDIR /src
 COPY Cargo.toml rust-toolchain.toml ./
-RUN cargo generate-lockfile
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs && cargo generate-lockfile
 COPY migrations ./migrations
 COPY src ./src
 RUN cargo build --release
