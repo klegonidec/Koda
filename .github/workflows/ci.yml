@@ -38,4 +38,4 @@ jobs:
           context: .
           platforms: linux/amd64
           push: false
-          tags: duo-bridge:ci
+          tags: koda:ci

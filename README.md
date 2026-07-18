@@ -26,7 +26,7 @@ docker compose up -d
 Pour construire les deux architectures :
 
 ```bash
-docker buildx build --platform linux/amd64,linux/arm64 -t duo-bridge:dev --push .
+docker buildx build --platform linux/amd64,linux/arm64 -t koda:dev --push .
 ```
 
 ## Webhooks

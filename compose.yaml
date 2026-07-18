@@ -3,7 +3,7 @@ services:
     build: .
     env_file: .env
     environment:
-      DATABASE_URL: sqlite:///data/duo-bridge.db?mode=rwc
+      DATABASE_URL: sqlite:///data/koda.db?mode=rwc
       OPENCODE_BASE_URL: http://opencode:4096
       HTTPS_PROXY: http://egress:3128
       HTTP_PROXY: http://egress:3128
@@ -11,8 +11,8 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - duo_data:/data
-      - duo_workspaces:/workspaces
+      - koda_data:/data
+      - koda_workspaces:/workspaces
     depends_on:
       opencode:
         condition: service_started
@@ -38,8 +38,8 @@ services:
     expose:
       - "4096"
     volumes:
-      - duo_workspaces:/workspaces
-      - duo_opencode:/opencode-config
+      - koda_workspaces:/workspaces
+      - koda_opencode:/opencode-config
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -59,6 +59,6 @@ services:
     cap_drop: [ALL]
 
 volumes:
-  duo_data:
-  duo_workspaces:
-  duo_opencode:
+  koda_data:
+  koda_workspaces:
+  koda_opencode:

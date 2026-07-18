@@ -19,7 +19,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 10001 --create-home --shell /usr/sbin/nologin app
 WORKDIR /app
-COPY --from=builder /src/target/release/duo-bridge /usr/local/bin/duo-bridge
+COPY --from=builder /src/target/release/koda /usr/local/bin/koda
 COPY --from=builder /src/target/release/koda-harness /usr/local/bin/koda-harness
 COPY --from=builder /src/target/release/koda-egress /usr/local/bin/koda-egress
 COPY migrations /app/migrations
@@ -31,4 +31,4 @@ ENV KODA_STATIC_DIR=/app/static
 EXPOSE 8080
 HEALTHCHECK --interval=20s --timeout=5s CMD /usr/bin/curl --fail http://127.0.0.1:8080/health/live || exit 1
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["/usr/local/bin/duo-bridge"]
+CMD ["/usr/local/bin/koda"]

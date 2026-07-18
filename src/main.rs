@@ -81,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
         .json()
         .init();
     let database_url =
-        env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:///data/duo-bridge.db?mode=rwc".into());
+        env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:///data/koda.db?mode=rwc".into());
     let options = SqliteConnectOptions::from_str(&database_url)?
         .create_if_missing(true)
         .foreign_keys(true)
@@ -164,7 +164,7 @@ async fn main() -> anyhow::Result<()> {
         .fallback(frontend)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
-    info!(%addr, "duo-bridge listening");
+    info!(%addr, "koda listening");
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
     Ok(())
@@ -248,7 +248,7 @@ async fn setup_page(State(s): State<Arc<AppState>>) -> impl IntoResponse {
     if is_installed(&s.db).await.unwrap_or(false) {
         return Redirect::to("/login").into_response();
     }
-    Html(r#"<!doctype html><html lang="fr"><meta charset="utf-8"><title>Installation Duo Bridge</title><style>body{font:16px system-ui;max-width:620px;margin:4rem auto;padding:1rem}label{display:block;margin-top:1rem}input{width:100%;padding:.6rem}button{margin-top:1.5rem;padding:.7rem 1rem}</style><h1>Installation</h1><p>Validez le mot de passe de bootstrap puis créez le premier compte administrateur.</p><form method="post"><label>Mot de passe de bootstrap<input name="bootstrap_password" type="password" required></label><label>Email<input name="email" type="email" required></label><label>Nom<input name="display_name" required></label><label>Mot de passe admin<input name="password" type="password" minlength="14" required></label><label>Confirmation<input name="password_confirm" type="password" minlength="14" required></label><button>Installer</button></form></html>"#).into_response()
+    Html(r#"<!doctype html><html lang="fr"><meta charset="utf-8"><title>Installation Koda</title><style>body{font:16px system-ui;max-width:620px;margin:4rem auto;padding:1rem}label{display:block;margin-top:1rem}input{width:100%;padding:.6rem}button{margin-top:1.5rem;padding:.7rem 1rem}</style><h1>Installation</h1><p>Validez le mot de passe de bootstrap puis créez le premier compte administrateur.</p><form method="post"><label>Mot de passe de bootstrap<input name="bootstrap_password" type="password" required></label><label>Email<input name="email" type="email" required></label><label>Nom<input name="display_name" required></label><label>Mot de passe admin<input name="password" type="password" minlength="14" required></label><label>Confirmation<input name="password_confirm" type="password" minlength="14" required></label><button>Installer</button></form></html>"#).into_response()
 }
 
 async fn setup_submit(
@@ -356,7 +356,7 @@ async fn login_submit(
     headers.insert(
         header::SET_COOKIE,
         HeaderValue::from_str(&format!(
-            "duo_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200"
+            "koda_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200"
         ))
         .unwrap(),
     );
@@ -365,7 +365,7 @@ async fn login_submit(
 }
 
 async fn logout(State(s): State<Arc<AppState>>, headers: HeaderMap) -> impl IntoResponse {
-    if let Some(t) = cookie(&headers, "duo_session") {
+    if let Some(t) = cookie(&headers, "koda_session") {
         let _ = sqlx::query("DELETE FROM auth_sessions WHERE token_hash=?")
             .bind(hex_hash(&t))
             .execute(&s.db)
@@ -374,7 +374,7 @@ async fn logout(State(s): State<Arc<AppState>>, headers: HeaderMap) -> impl Into
     let mut h = HeaderMap::new();
     h.insert(
         header::SET_COOKIE,
-        HeaderValue::from_static("duo_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"),
+        HeaderValue::from_static("koda_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"),
     );
     h.insert(header::LOCATION, HeaderValue::from_static("/login"));
     (StatusCode::SEE_OTHER, h, "")
@@ -982,7 +982,7 @@ async fn trigger_pipeline(_s: &AppState, _payload: &str) -> Result<(), String> {
 }
 
 async fn auth_user(db: &SqlitePool, headers: &HeaderMap) -> Option<String> {
-    let t = cookie(headers, "duo_session")?;
+    let t = cookie(headers, "koda_session")?;
     let now = Utc::now().to_rfc3339();
     sqlx::query("SELECT user_id FROM auth_sessions WHERE token_hash=? AND expires_at>? ")
         .bind(hex_hash(&t))

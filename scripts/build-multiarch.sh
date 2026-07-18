@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-: "${IMAGE:?Set IMAGE, e.g. registry.example/duo-bridge}"
+: "${IMAGE:?Set IMAGE, e.g. registry.example/koda}"
 : "${TAG:=dev}"
 : "${OPENCODE_VERSION:?Set a tested OPENCODE_VERSION}"
 docker buildx build --platform linux/amd64,linux/arm64 -t "${IMAGE}:${TAG}" --push .
